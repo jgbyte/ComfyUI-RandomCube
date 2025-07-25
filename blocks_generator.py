@@ -2,7 +2,7 @@ from PIL import Image, ImageDraw
 import torch
 import re
 
-class blocks_generator.py:
+class ColorCubeArrayNode:
     @classmethod
     def INPUT_TYPES(cls):
         return {
