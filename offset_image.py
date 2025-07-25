@@ -4,7 +4,7 @@ from PIL import ImageFilter
 import numpy as np
 from torchvision.transforms.functional import to_pil_image, to_tensor
 
-class offset_image.py:
+class OffsetImageNode:
     @classmethod
     def INPUT_TYPES(cls):
         return {
