@@ -2,7 +2,6 @@ from .random_cube_grid import NODE_CLASS_MAPPINGS as RANDOM_GRID_NODES, NODE_DIS
 from .offset_image import OffsetImageNode
 from .blocks_generator import ColorCubeArrayNode
 
-# Merge all node mappings
 NODE_CLASS_MAPPINGS = {
     **RANDOM_GRID_NODES,
     "offset_image": OffsetImageNode,
