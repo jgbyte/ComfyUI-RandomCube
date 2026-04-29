@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import torch
 import random
@@ -26,7 +27,7 @@ class RandomCubeGrid:
 
     Outputs:
     - PNG image
-    - List of (x, y, size) tuples for cube coordinates
+    - JSON string: list of {"x", "y", "size"} objects for cube coordinates
     """
 
     @classmethod
@@ -150,10 +151,11 @@ class RandomCubeGrid:
         image_tensor = torch.tensor(image, dtype=torch.float32) / 255.0
         image_tensor = image_tensor.unsqueeze(0)
 
-        # Convert coordinates to string format
-        coordinates_str = f"Seed: {seed}\n" + "\n".join([f"({x}, {y}, {size:.2f})" for x, y, size in cube_coordinates])
+        coordinates_json = json.dumps(
+            [{"x": x, "y": y, "size": round(float(size), 2)} for x, y, size in cube_coordinates]
+        )
 
-        return (image_tensor, coordinates_str)
+        return (image_tensor, coordinates_json)
 
 # Register node
 NODE_CLASS_MAPPINGS = {"RandomCubeGrid": RandomCubeGrid}

@@ -10,20 +10,23 @@ POSITIONS = [
 ]
 
 
-def _resolve_position(position, canvas_h, canvas_w, asset_h, asset_w, padding):
+def resolve_position(position, canvas_h, canvas_w, asset_h, asset_w,
+                      pad_top, pad_bottom, pad_left, pad_right):
     v, h = position.split("-")
     if v == "top":
-        cy = padding
+        cy = pad_top
     elif v == "bottom":
-        cy = canvas_h - asset_h - padding
+        cy = canvas_h - asset_h - pad_bottom
     else:
-        cy = (canvas_h - asset_h) // 2
+        inner_h = canvas_h - pad_top - pad_bottom
+        cy = pad_top + (inner_h - asset_h) // 2
     if h == "left":
-        cx = padding
+        cx = pad_left
     elif h == "right":
-        cx = canvas_w - asset_w - padding
+        cx = canvas_w - asset_w - pad_right
     else:
-        cx = (canvas_w - asset_w) // 2
+        inner_w = canvas_w - pad_left - pad_right
+        cx = pad_left + (inner_w - asset_w) // 2
     return cy, cx
 
 
@@ -34,13 +37,15 @@ class BGRemoveCompose:
 
     - background = 'alpha': transparent canvas, asset alpha preserved.
     - background = 'color': solid bg_color canvas, asset alpha-blended over it.
-    - resize_to_fit ON: asset is scaled to fit inside (width - 2*padding,
-      height - 2*padding) preserving aspect ratio. The 'scale' slider is
+    - resize_to_fit ON: asset is scaled to fit inside the canvas minus the
+      per-side paddings, preserving aspect ratio. The 'scale' slider is
       ignored in this mode.
     - resize_to_fit OFF: asset is sized via the 'scale' multiplier on its
       original (post-RMBG bbox) dimensions.
-    - padding: pixel margin between asset and canvas edges. Also shifts the
-      9-grid positions inward (e.g., top-left places at (padding, padding)).
+    - padding_top/right/bottom/left: per-side pixel margins between asset
+      and canvas edges. Shift the 9-grid positions inward (e.g., top-left
+      places at (padding_top, padding_left)). Center positions center
+      within the inner box left after subtracting the paddings.
 
     Output IMAGE is always 4-channel RGBA. In 'color' mode the alpha channel
     is fully opaque so the result saves identically to a 3-channel PNG.
@@ -59,7 +64,10 @@ class BGRemoveCompose:
                 "position": (POSITIONS, {"default": "middle-center"}),
                 "resize_to_fit": ("BOOLEAN", {"default": False}),
                 "scale": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 2.0, "step": 0.05}),
-                "padding": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
+                "padding_top": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
+                "padding_bottom": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
+                "padding_left": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
+                "padding_right": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
             }
         }
 
@@ -69,7 +77,8 @@ class BGRemoveCompose:
     CATEGORY = "whisker-nodes"
 
     def compose(self, image, model, width, height, background, bg_color,
-                position, resize_to_fit, scale, padding):
+                position, resize_to_fit, scale,
+                padding_top, padding_bottom, padding_left, padding_right):
         b = image.shape[0]
 
         out_imgs = torch.zeros((b, height, width, 4), dtype=torch.float32)
@@ -82,8 +91,8 @@ class BGRemoveCompose:
 
         masks = predict_mask(image, model)
 
-        eff_w = max(1, width - 2 * padding)
-        eff_h = max(1, height - 2 * padding)
+        eff_w = max(1, width - padding_left - padding_right)
+        eff_h = max(1, height - padding_top - padding_bottom)
 
         for i in range(b):
             mask_i = masks[i]
@@ -110,7 +119,10 @@ class BGRemoveCompose:
                 alpha.unsqueeze(0).unsqueeze(0), size=(new_h, new_w), mode="bilinear", align_corners=False
             ).squeeze(0).squeeze(0).clamp(0.0, 1.0)
 
-            cy, cx = _resolve_position(position, height, width, new_h, new_w, padding)
+            cy, cx = resolve_position(
+                position, height, width, new_h, new_w,
+                padding_top, padding_bottom, padding_left, padding_right,
+            )
 
             dst_y0 = max(0, cy)
             dst_x0 = max(0, cx)
