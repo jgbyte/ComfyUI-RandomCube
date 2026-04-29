@@ -26,24 +26,26 @@ class OffsetImageNode:
         b, h, w, c = image.shape
         image_offset = torch.roll(image, shifts=(offset_y, offset_x), dims=(1, 2))
 
-        # Create mask
         mask = torch.zeros((h, w), dtype=torch.float32)
+        half_lo = mask_thickness // 2
+        half_hi = mask_thickness - half_lo
 
         if offset_x != 0:
-            x_start = max(0, w - abs(offset_x)) if offset_x < 0 else 0
-            x_end = min(w, abs(offset_x)) if offset_x > 0 else w
-            mask[:, x_start:x_start + mask_thickness] = 1.0 if offset_x > 0 else mask[:, x_end - mask_thickness:x_end] = 1.0
+            seam_x = offset_x % w
+            x_lo = max(0, seam_x - half_lo)
+            x_hi = min(w, seam_x + half_hi)
+            mask[:, x_lo:x_hi] = 1.0
 
         if offset_y != 0:
-            y_start = max(0, h - abs(offset_y)) if offset_y < 0 else 0
-            y_end = min(h, abs(offset_y)) if offset_y > 0 else h
-            mask[y_start:y_start + mask_thickness, :] = 1.0 if offset_y > 0 else mask[y_end - mask_thickness:y_end, :] = 1.0
+            seam_y = offset_y % h
+            y_lo = max(0, seam_y - half_lo)
+            y_hi = min(h, seam_y + half_hi)
+            mask[y_lo:y_hi, :] = 1.0
 
-        # Optional blur
         if mask_blur > 0:
             pil_mask = to_pil_image(mask)
             pil_mask = pil_mask.filter(ImageFilter.GaussianBlur(radius=mask_blur))
             mask = to_tensor(pil_mask).squeeze(0)
 
-        mask = mask.unsqueeze(0).unsqueeze(0).repeat(b, 1, 1, 1)  # Convert to batch mask
+        mask = mask.unsqueeze(0).repeat(b, 1, 1)
         return (image_offset, mask)
