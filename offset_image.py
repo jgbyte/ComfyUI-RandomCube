@@ -20,7 +20,7 @@ class OffsetImageNode:
     RETURN_TYPES = ("IMAGE", "MASK",)
     RETURN_NAMES = ("offset_image", "seam_mask",)
     FUNCTION = "offset_image"
-    CATEGORY = "image/transform"
+    CATEGORY = "whisker-nodes"
 
     def offset_image(self, image, offset_x, offset_y, mask_thickness, mask_blur):
         b, h, w, c = image.shape

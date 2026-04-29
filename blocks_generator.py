@@ -28,7 +28,7 @@ class ColorCubeArrayNode:
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("image",)
     FUNCTION = "draw_cubes"
-    CATEGORY = "image/generation"
+    CATEGORY = "whisker-nodes"
 
     def draw_cubes(self, array_width, array_height, resolution,
                    bg_color, color1, coords1,

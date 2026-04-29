@@ -57,7 +57,7 @@ class RandomCubeGrid:
 
     FUNCTION = "generate_grid"
 
-    CATEGORY = "Custom Nodes"
+    CATEGORY = "whisker-nodes"
 
     def generate_grid(
         self, grid_width, grid_height, output_resolution, min_cube_size, max_cube_size,
