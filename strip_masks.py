@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from PIL import Image, ImageFilter
 
 
 def _smooth_noise_1d(length, scale, seed):
@@ -80,6 +81,7 @@ class StripMaskGenerator:
                 "primary_mask_size": ("INT", {"default": 256, "min": 1, "max": 8192, "step": 1}),
                 "noise_amount": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 512.0, "step": 1.0}),
                 "noise_scale": ("FLOAT", {"default": 50.0, "min": 1.0, "max": 1024.0, "step": 1.0}),
+                "blur": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 200.0, "step": 0.5}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFF, "step": 1}),
             }
         }
@@ -91,7 +93,7 @@ class StripMaskGenerator:
 
     def generate(self, width, height, num_masks, orientation,
                  primary_mask_index, primary_mask_size,
-                 noise_amount, noise_scale, seed):
+                 noise_amount, noise_scale, blur, seed):
         if orientation == "horizontal":
             total = height
             edge_length = width
@@ -120,6 +122,10 @@ class StripMaskGenerator:
                 left = np.zeros(edge_length, dtype=np.float32) if i == 0 else (boundaries[i] + shared_noise)
                 right = np.full(edge_length, total, dtype=np.float32) if i == num_masks - 1 else (boundaries[i + 1] + shared_noise)
                 mask = ((x_grid >= left[:, np.newaxis]) & (x_grid < right[:, np.newaxis])).astype(np.float32)
+            if blur > 0:
+                pil = Image.fromarray((mask * 255).astype(np.uint8), mode="L")
+                pil = pil.filter(ImageFilter.GaussianBlur(radius=float(blur)))
+                mask = np.asarray(pil, dtype=np.float32) / 255.0
             masks.append(mask)
 
         outputs = []

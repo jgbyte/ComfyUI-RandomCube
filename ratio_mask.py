@@ -1,6 +1,8 @@
 import re
 
+import numpy as np
 import torch
+from PIL import Image, ImageDraw, ImageFilter
 
 from .bg_remove import POSITIONS, resolve_position
 from .bg_remove_utils import hex_to_rgb
@@ -27,6 +29,11 @@ class RatioMask:
     The MASK output is 1.0 inside the rectangle and 0.0 outside (independent
     of bg_color). The IMAGE output paints the rectangle white over bg_color
     (so default '#000000' gives the classic white-on-black look).
+
+    corner_radius rounds the rectangle's corners (capped at half the shorter
+    side). blur applies a Gaussian to the mask edges; the IMAGE is derived
+    by blending white over bg_color through that mask, so soft edges show
+    consistently in both outputs.
     """
 
     @classmethod
@@ -38,6 +45,8 @@ class RatioMask:
                 "ratio": ("STRING", {"default": "1:1"}),
                 "position": (POSITIONS, {"default": "middle-center"}),
                 "bg_color": ("STRING", {"default": "#000000"}),
+                "corner_radius": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
+                "blur": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 200.0, "step": 0.5}),
                 "padding_top": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
                 "padding_bottom": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
                 "padding_left": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
@@ -51,6 +60,7 @@ class RatioMask:
     CATEGORY = "whisker-nodes"
 
     def generate(self, width, height, ratio, position, bg_color,
+                 corner_radius, blur,
                  padding_top, padding_bottom, padding_left, padding_right):
         rw, rh = _parse_ratio(ratio)
         target_aspect = rw / rh
@@ -70,20 +80,30 @@ class RatioMask:
             padding_top, padding_bottom, padding_left, padding_right,
         )
 
+        pil_mask = Image.new("L", (width, height), 0)
+        if shape_w > 0 and shape_h > 0:
+            draw = ImageDraw.Draw(pil_mask)
+            box = [cx, cy, cx + shape_w - 1, cy + shape_h - 1]
+            r = min(int(corner_radius), min(shape_w, shape_h) // 2)
+            if r > 0:
+                draw.rounded_rectangle(box, radius=r, fill=255)
+            else:
+                draw.rectangle(box, fill=255)
+
+        if blur > 0:
+            pil_mask = pil_mask.filter(ImageFilter.GaussianBlur(radius=float(blur)))
+
+        mask_np = np.asarray(pil_mask, dtype=np.float32) / 255.0
+        mask = torch.from_numpy(mask_np).unsqueeze(0)
+
         rgb = hex_to_rgb(bg_color)
         bg_t = torch.tensor(rgb, dtype=torch.float32) / 255.0
 
-        image = torch.zeros((1, height, width, 3), dtype=torch.float32)
-        image[..., :] = bg_t
-        mask = torch.zeros((1, height, width), dtype=torch.float32)
-
-        y0 = max(0, cy)
-        x0 = max(0, cx)
-        y1 = min(height, cy + shape_h)
-        x1 = min(width, cx + shape_w)
-        if y1 > y0 and x1 > x0:
-            image[0, y0:y1, x0:x1, :] = 1.0
-            mask[0, y0:y1, x0:x1] = 1.0
+        m3 = mask.unsqueeze(-1)
+        bg_canvas = torch.zeros((1, height, width, 3), dtype=torch.float32)
+        bg_canvas[..., :] = bg_t
+        white = torch.ones((1, height, width, 3), dtype=torch.float32)
+        image = bg_canvas * (1.0 - m3) + white * m3
 
         return (image, mask)
 
